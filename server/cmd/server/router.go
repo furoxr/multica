@@ -495,6 +495,17 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				})
 			})
 
+			// Artifacts
+			r.Route("/api/artifacts", func(r chi.Router) {
+				r.Get("/", h.ListArtifacts)
+				r.Post("/", h.CreateArtifact)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetArtifact)
+					r.Put("/", h.UpdateArtifact)
+					r.Delete("/", h.DeleteArtifact)
+				})
+			})
+
 			// Usage
 			r.Route("/api/usage", func(r chi.Router) {
 				r.Get("/daily", h.GetWorkspaceUsageByDay)

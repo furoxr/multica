@@ -39,6 +39,11 @@ func TestParseMentions(t *testing.T) {
 			want:    []Mention{{Type: "issue", ID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}},
 		},
 		{
+			name:    "artifact mention without @",
+			content: "[Spec](mention://artifact/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa) is reusable",
+			want:    []Mention{{Type: "artifact", ID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}},
+		},
+		{
 			name:    "member mention",
 			content: "[@Bob](mention://member/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa) look",
 			want:    []Mention{{Type: "member", ID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}},

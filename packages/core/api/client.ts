@@ -34,6 +34,10 @@ import type {
   CreateSkillRequest,
   UpdateSkillRequest,
   SetAgentSkillsRequest,
+  Artifact,
+  ArtifactSummary,
+  CreateArtifactRequest,
+  UpdateArtifactRequest,
   PersonalAccessToken,
   CreatePersonalAccessTokenRequest,
   CreatePersonalAccessTokenResponse,
@@ -1149,6 +1153,36 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify(data),
     });
+  }
+
+  // Artifacts
+  async listArtifacts(params?: { origin_issue_id?: string }): Promise<ArtifactSummary[]> {
+    const query = params?.origin_issue_id
+      ? `?origin_issue_id=${encodeURIComponent(params.origin_issue_id)}`
+      : "";
+    return this.fetch(`/api/artifacts${query}`);
+  }
+
+  async getArtifact(id: string): Promise<Artifact> {
+    return this.fetch(`/api/artifacts/${id}`);
+  }
+
+  async createArtifact(data: CreateArtifactRequest): Promise<Artifact> {
+    return this.fetch("/api/artifacts", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateArtifact(id: string, data: UpdateArtifactRequest): Promise<Artifact> {
+    return this.fetch(`/api/artifacts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteArtifact(id: string): Promise<void> {
+    await this.fetch(`/api/artifacts/${id}`, { method: "DELETE" });
   }
 
   async listAgentSkills(agentId: string): Promise<SkillSummary[]> {

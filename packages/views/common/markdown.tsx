@@ -7,7 +7,9 @@ import {
   type RenderMode,
 } from "@multica/ui/markdown";
 import { useConfigStore } from "@multica/core/config";
+import { useWorkspacePaths } from "@multica/core/paths";
 import { IssueMentionCard } from "../issues/components/issue-mention-card";
+import { AppLink } from "../navigation";
 
 export type { RenderMode };
 
@@ -20,12 +22,24 @@ export type MarkdownProps = MarkdownBaseProps;
 function defaultRenderMention({
   type,
   id,
+  artifactHref,
 }: {
   type: string;
   id: string;
+  artifactHref: string;
 }): React.ReactNode {
   if (type === "issue") {
     return <IssueMentionCard issueId={id} />;
+  }
+  if (type === "artifact") {
+    return (
+      <AppLink
+        href={artifactHref}
+        className="mx-0.5 font-semibold text-primary"
+      >
+        Artifact
+      </AppLink>
+    );
   }
   return null;
 }
@@ -36,7 +50,16 @@ function defaultRenderMention({
  */
 export function Markdown(props: MarkdownProps): React.JSX.Element {
   const cdnDomain = useConfigStore((s) => s.cdnDomain);
-  return <MarkdownBase renderMention={defaultRenderMention} cdnDomain={cdnDomain} {...props} />;
+  const paths = useWorkspacePaths();
+  return (
+    <MarkdownBase
+      renderMention={({ type, id }) =>
+        defaultRenderMention({ type, id, artifactHref: paths.artifactDetail(id) })
+      }
+      cdnDomain={cdnDomain}
+      {...props}
+    />
+  );
 }
 
 export const MemoizedMarkdown = React.memo(Markdown);

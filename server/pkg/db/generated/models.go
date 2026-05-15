@@ -113,6 +113,22 @@ type Attachment struct {
 	ChatMessageID pgtype.UUID        `json:"chat_message_id"`
 }
 
+type Artifact struct {
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	ProjectID     pgtype.UUID        `json:"project_id"`
+	Title         string             `json:"title"`
+	Summary       string             `json:"summary"`
+	Content       string             `json:"content"`
+	ContentType   string             `json:"content_type"`
+	CreatorType   string             `json:"creator_type"`
+	CreatorID     pgtype.UUID        `json:"creator_id"`
+	OriginIssueID pgtype.UUID        `json:"origin_issue_id"`
+	OriginTaskID  pgtype.UUID        `json:"origin_task_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Autopilot struct {
 	ID                 pgtype.UUID        `json:"id"`
 	WorkspaceID        pgtype.UUID        `json:"workspace_id"`
