@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, Copy, FileText } from "lucide-react";
+import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { artifactDetailOptions } from "@multica/core/artifacts";
 import { useWorkspaceId } from "@multica/core/hooks";
@@ -54,6 +55,20 @@ export function ArtifactDetailPage({ artifactId }: { artifactId: string }) {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <FileText className="h-4 w-4 text-muted-foreground" />
+          {artifact?.identifier && (
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(artifact.identifier);
+                toast.success(`Copied ${artifact.identifier}`);
+              }}
+              className="flex shrink-0 items-center gap-1 rounded px-1 py-0.5 font-mono text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              title="Copy identifier"
+            >
+              <span>{artifact.identifier}</span>
+              <Copy className="h-3 w-3" />
+            </button>
+          )}
           <h1 className="truncate text-sm font-medium">
             {artifact?.title ?? "Artifact"}
           </h1>
@@ -74,7 +89,10 @@ export function ArtifactDetailPage({ artifactId }: { artifactId: string }) {
         ) : (
           <main className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)_280px] gap-8 px-6 py-6 max-lg:grid-cols-1">
             <article className="min-w-0">
-              <h2 className="text-2xl font-semibold tracking-normal">
+              <div className="font-mono text-xs text-muted-foreground">
+                {artifact.identifier}
+              </div>
+              <h2 className="mt-1 text-2xl font-semibold tracking-normal">
                 {artifact.title}
               </h2>
               {artifact.summary && (

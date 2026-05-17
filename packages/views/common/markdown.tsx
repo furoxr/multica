@@ -9,6 +9,7 @@ import {
 import { useConfigStore } from "@multica/core/config";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { IssueMentionCard } from "../issues/components/issue-mention-card";
+import { ArtifactChip } from "../artifacts/components/artifact-chip";
 import { AppLink } from "../navigation";
 
 export type { RenderMode };
@@ -33,11 +34,11 @@ function defaultRenderMention({
   }
   if (type === "artifact") {
     return (
-      <AppLink
-        href={artifactHref}
-        className="mx-0.5 font-semibold text-primary"
-      >
-        Artifact
+      <AppLink href={artifactHref} className="inline-flex">
+        <ArtifactChip
+          artifactId={id}
+          className="cursor-pointer hover:bg-accent transition-colors"
+        />
       </AppLink>
     );
   }

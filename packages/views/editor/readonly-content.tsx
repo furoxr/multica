@@ -39,6 +39,7 @@ import { useNavigation } from "../navigation";
 import { useT } from "../i18n";
 import { openExternal } from "../platform";
 import { IssueMentionCard } from "../issues/components/issue-mention-card";
+import { ArtifactChip } from "../artifacts/components/artifact-chip";
 import { ImageLightbox } from "./extensions/image-view";
 import { useLinkHover, LinkHoverCard } from "./link-hover-card";
 import { openLink, isMentionHref } from "./utils/link-handler";
@@ -125,6 +126,34 @@ function IssueMentionLink({ issueId, label }: { issueId: string; label?: string 
   );
 }
 
+function ArtifactMentionLink({ artifactId, label }: { artifactId: string; label?: string }) {
+  const { push, openInNewTab } = useNavigation();
+  const p = useWorkspacePaths();
+  const path = p.artifactDetail(artifactId);
+  return (
+    <span
+      className="inline align-middle"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.metaKey || e.ctrlKey || e.shiftKey) {
+          if (openInNewTab) {
+            openInNewTab(path, label);
+          }
+          return;
+        }
+        push(path);
+      }}
+    >
+      <ArtifactChip
+        artifactId={artifactId}
+        fallbackLabel={label}
+        className="cursor-pointer hover:bg-accent transition-colors"
+      />
+    </span>
+  );
+}
+
 // Named component so it can call useWorkspaceSlug() — arrow function inlined
 // inside `components` below would still work, but extracting it keeps the
 // hook usage explicit and avoids hook-in-object-literal surprises.
@@ -138,17 +167,20 @@ function ReadonlyLink({
   const slug = useWorkspaceSlug();
 
   if (isMentionHref(href)) {
-    const match = href.match(/^mention:\/\/(member|agent|issue|all)\/(.+)$/);
+    const match = href.match(/^mention:\/\/(member|agent|issue|artifact|squad|all)\/(.+)$/);
+    const label =
+      typeof children === "string"
+        ? children
+        : Array.isArray(children)
+          ? children.join("")
+          : undefined;
     if (match?.[1] === "issue" && match[2]) {
-      const label =
-        typeof children === "string"
-          ? children
-          : Array.isArray(children)
-            ? children.join("")
-            : undefined;
       return <IssueMentionLink issueId={match[2]} label={label} />;
     }
-    // Member / agent / all mentions
+    if (match?.[1] === "artifact" && match[2]) {
+      return <ArtifactMentionLink artifactId={match[2]} label={label} />;
+    }
+    // Member / agent / squad / all mentions
     return <span className="mention">{children}</span>;
   }
 

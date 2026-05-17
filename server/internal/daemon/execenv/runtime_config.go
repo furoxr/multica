@@ -129,7 +129,9 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	b.WriteString("- `multica autopilot get <id> --output json` — Get autopilot details including triggers\n")
 	b.WriteString("- `multica autopilot runs <id> [--limit N] --output json` — List execution history for an autopilot\n")
 	b.WriteString("- `multica project get <id> --output json` — Get project details. Includes `resource_count`; the resources themselves live at the sub-collection below.\n")
-	b.WriteString("- `multica project resource list <project-id> --output json` — List resources (e.g. github_repo) attached to a project. Use this when `resource_count > 0` and you need the actual refs.\n\n")
+	b.WriteString("- `multica project resource list <project-id> --output json` — List resources (e.g. github_repo) attached to a project. Use this when `resource_count > 0` and you need the actual refs.\n")
+	b.WriteString("- `multica artifact list [--origin-issue <issue-id>] --output json` — List artifacts in the workspace; pass `--origin-issue` to scope to a specific issue's deliverables\n")
+	b.WriteString("- `multica artifact get <id> --output json` — Get full artifact details including content\n\n")
 
 	b.WriteString("### Write\n")
 	b.WriteString("- `multica issue create --title \"...\" [--description \"...\"] [--priority X] [--status X] [--assignee X | --assignee-id <uuid>] [--parent <issue-id>] [--project <project-id>] [--due-date <RFC3339>] [--attachment <path>]` — Create a new issue. `--attachment` may be repeated to upload multiple files; labels and subscribers are not accepted here, attach them after create with the commands below.\n")
@@ -167,7 +169,10 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	b.WriteString("- `multica autopilot create --title \"...\" --agent <name> --mode create_issue|run_only [--description \"...\"]` — Create an autopilot\n")
 	b.WriteString("- `multica autopilot update <id> [--title X] [--description X] [--status active|paused] [--mode create_issue|run_only]` — Update an autopilot\n")
 	b.WriteString("- `multica autopilot trigger <id>` — Manually trigger an autopilot to run once\n")
-	b.WriteString("- `multica autopilot delete <id>` — Delete an autopilot\n\n")
+	b.WriteString("- `multica autopilot delete <id>` — Delete an autopilot\n")
+	b.WriteString("- `multica artifact create --title \"...\" [--summary \"...\"] [--content \"...\" | --content-file <path>] [--content-type text/markdown|text/plain|application/json] [--origin-issue <issue-id>] [--origin-task <task-id>] --output json` — Persist a deliverable as a workspace artifact. Prefer `--content-file` for anything longer than a few lines; defaults to `text/markdown`. See the Artifacts section below for when to use this.\n")
+	b.WriteString("- `multica artifact update <id> [--title ...] [--summary ...] [--content ... | --content-file ...] [--content-type ...]` — Update an existing artifact when you have produced a revised version of the same deliverable\n")
+	b.WriteString("- `multica artifact delete <id> --yes` — Delete an artifact (use sparingly — artifacts are durable by design)\n\n")
 
 	if provider == "codex" {
 		b.WriteString("## Codex-Specific Comment Formatting\n\n")
@@ -290,10 +295,12 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 		fmt.Fprintf(&b, "2. Run `multica issue comment list %s --output json` to read the full comment history (returns all comments, capped server-side at 2000) — this is mandatory, not optional. Earlier comments often carry context the issue body lacks (e.g. which repo to work in, the prior agent's findings, the reason the issue was reassigned to you). Skipping this step is the most common cause of agents acting on stale or incomplete instructions.\n", ctx.IssueID)
 		fmt.Fprintf(&b, "3. Run `multica issue status %s in_progress`\n", ctx.IssueID)
 		b.WriteString("4. Follow your Skills and Agent Identity to complete the task (write code, investigate, etc.)\n")
+		fmt.Fprintf(&b, "   - **If your work produces a durable deliverable (design doc, report, spec, generated file, structured data, long-form answer that exceeds a short summary), you MUST persist it as an artifact**: `multica artifact create --title \"...\" --content-file <path> --origin-issue %s --origin-task \"$MULTICA_TASK_ID\"`. Do this BEFORE step 5. Files left on disk are not visible to the user. See the Artifacts section for criteria and the full command.\n", ctx.IssueID)
+		b.WriteString("   - **Do NOT paste artifact-worthy content into a comment.** Comments are for short summaries and pointers — full long-form content belongs in an artifact, linked from the comment. If you find yourself about to paste a multi-paragraph document, a report body, or a code/file dump into `--content`, stop and create an artifact instead.\n")
 		if ctx.IsSquadLeader {
-			fmt.Fprintf(&b, "5. **Post your final results as a comment** (unless your outcome is `no_action` — in that case, calling `multica squad activity %s no_action --reason \"...\"` alone is sufficient; you MUST exit without posting any comment. DO NOT post a comment announcing no_action or saying you are exiting silently): `multica issue comment add %s --content \"...\"`. Your results are only visible to the user if posted via this CLI call; text in your terminal or run logs is NOT delivered.\n", ctx.IssueID, ctx.IssueID)
+			fmt.Fprintf(&b, "5. **Post your final results as a comment** (unless your outcome is `no_action` — in that case, calling `multica squad activity %s no_action --reason \"...\"` alone is sufficient; you MUST exit without posting any comment. DO NOT post a comment announcing no_action or saying you are exiting silently): `multica issue comment add %s --content \"...\"`. The comment should be a concise summary (1–3 sentences). If you created an artifact in step 4, reference it by ID in the comment instead of inlining its content. Your results are only visible to the user if posted via this CLI call; text in your terminal or run logs is NOT delivered.\n", ctx.IssueID, ctx.IssueID)
 		} else {
-			fmt.Fprintf(&b, "5. **Post your final results as a comment — this step is mandatory**: `multica issue comment add %s --content \"...\"`. Your results are only visible to the user if posted via this CLI call; text in your terminal or run logs is NOT delivered.\n", ctx.IssueID)
+			fmt.Fprintf(&b, "5. **Post your final results as a comment — this step is mandatory**: `multica issue comment add %s --content \"...\"`. The comment should be a concise summary (1–3 sentences). If you created an artifact in step 4, reference it by ID in the comment instead of inlining its content. Your results are only visible to the user if posted via this CLI call; text in your terminal or run logs is NOT delivered.\n", ctx.IssueID)
 		}
 		fmt.Fprintf(&b, "6. When done, run `multica issue status %s in_review`\n", ctx.IssueID)
 		fmt.Fprintf(&b, "7. If blocked, run `multica issue status %s blocked` and post a comment explaining why\n\n", ctx.IssueID)
@@ -349,6 +356,27 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 	b.WriteString("This downloads the file to the current directory and prints the local path. Use `-o <dir>` to save elsewhere.\n")
 	b.WriteString("After downloading, you can read the file directly (e.g. view an image, read a document).\n\n")
 
+	b.WriteString("## Artifacts\n\n")
+	b.WriteString("Your working directory is a scratch space. It is reused across runs and may be garbage-collected — files you leave on disk are NOT visible to the user, NOT searchable, and may disappear. The only durable way to hand a deliverable back to the workspace is to save it as a **Multica artifact**.\n\n")
+	b.WriteString("### Artifact vs comment — pick the right channel\n\n")
+	b.WriteString("- **Long-form / structured deliverable → artifact** (then a short comment with the artifact ID/link).\n")
+	b.WriteString("- **Short status, summary, decision, or pointer → comment only.**\n\n")
+	b.WriteString("Inlining a long-form deliverable directly into `multica issue comment add --content \"...\"` is the wrong channel: it is hard to revise, hard to discover, and not addressable. **If the content you are about to deliver is something a future reader would want to open as a document, it is an artifact — not a comment body.**\n\n")
+	b.WriteString("### When to save an artifact\n\n")
+	b.WriteString("Save an artifact when your work produces a concrete, reusable deliverable that the user (or a future agent) should be able to open and read directly. Typical examples:\n\n")
+	b.WriteString("- A design doc, spec, RFC, or plan you wrote\n")
+	b.WriteString("- A generated report (analysis, audit, benchmark results, test report)\n")
+	b.WriteString("- A standalone generated file (a config, a migration plan, a manifest, a translated document)\n")
+	b.WriteString("- Structured data extracted or computed for downstream use (JSON, CSV)\n")
+	b.WriteString("- A long-form answer that exceeds what fits naturally in a comment\n\n")
+	b.WriteString("Do NOT save an artifact for: code changes that landed in a repo (the PR/commit is the deliverable), short status updates (use a comment), routine command output, or transient logs.\n\n")
+	b.WriteString("### How to save\n\n")
+	b.WriteString("Prefer writing the content to a file on disk first, then upload via `--content-file` — this is byte-safe for non-ASCII content and avoids shell escaping. The agent runtime exposes `$MULTICA_TASK_ID` so you can attribute the artifact to this exact run.\n\n")
+	b.WriteString("```\nmultica artifact create \\\n  --title \"Concise descriptive title\" \\\n  --summary \"One-line description of what this is\" \\\n  --content-file ./output.md \\\n  --content-type text/markdown \\\n  --origin-issue <issue-id> \\\n  --origin-task \"$MULTICA_TASK_ID\" \\\n  --output json\n```\n\n")
+	b.WriteString("Pass `--origin-issue <issue-id>` (and `--origin-task \"$MULTICA_TASK_ID\"` when running inside a task) so the artifact is discoverable from the originating issue. After creation, **link the artifact in your final comment** so the user can find it — there is no automatic notification:\n\n")
+	b.WriteString("```\nmultica issue comment add <issue-id> --content \"Saved the audit report as an artifact: <artifact-id>\"\n```\n\n")
+	b.WriteString("Content type guidance: use `text/markdown` for prose / docs / reports (default), `application/json` for structured data, `text/plain` for raw logs or non-markdown text.\n\n")
+
 	b.WriteString("## Important: Always Use the `multica` CLI\n\n")
 	b.WriteString("All interactions with Multica platform resources — including issues, comments, attachments, images, files, and any other platform data — **must** go through the `multica` CLI. ")
 	b.WriteString("Do NOT use `curl`, `wget`, or any other HTTP client to access Multica URLs or APIs directly. ")
@@ -371,9 +399,14 @@ func buildMetaSkillContent(provider string, ctx TaskContextForEnv) string {
 		} else {
 			b.WriteString("⚠️ **Final results MUST be delivered via `multica issue comment add`.** The user does NOT see your terminal output, assistant chat text, or run logs — only comments on the issue. A task that finishes without a result comment is invisible to the user, even if the work itself was correct.\n\n")
 		}
+		b.WriteString("**Pick the right channel for the result body:**\n")
+		b.WriteString("- Long-form deliverable (doc, report, spec, structured data, multi-paragraph answer) → `multica artifact create` first, then a short comment with the artifact ID/link. Do NOT paste the deliverable body into `--content`.\n")
+		b.WriteString("- Short outcome / status / pointer → comment only, no artifact.\n\n")
 		b.WriteString("Keep comments concise and natural — state the outcome, not the process.\n")
 		b.WriteString("Good: \"Fixed the login redirect. PR: https://...\"\n")
+		b.WriteString("Good: \"Drafted the migration plan — saved as artifact `art_abc123`.\"\n")
 		b.WriteString("Bad: \"1. Read the issue 2. Found the bug in auth.go 3. Created branch 4. ...\"\n")
+		b.WriteString("Bad: pasting a 500-line design doc into `--content` instead of creating an artifact.\n")
 		b.WriteString("When referencing an issue in a comment, use the issue mention format `[MUL-123](mention://issue/<issue-id>)` so it renders as a clickable link. (Issue mentions have no side effect; only member/agent mentions do — see the Mentions section above.)\n")
 	}
 

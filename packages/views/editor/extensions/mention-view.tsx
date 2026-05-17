@@ -19,6 +19,7 @@ import type { NodeViewProps } from "@tiptap/react";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { useNavigation } from "../../navigation";
 import { IssueChip } from "../../issues/components/issue-chip";
+import { ArtifactChip } from "../../artifacts/components/artifact-chip";
 
 export function MentionView({ node }: NodeViewProps) {
   const { type, id, label } = node.attrs;
@@ -27,6 +28,14 @@ export function MentionView({ node }: NodeViewProps) {
     return (
       <NodeViewWrapper as="span" className="inline">
         <IssueMention issueId={id} fallbackLabel={label} />
+      </NodeViewWrapper>
+    );
+  }
+
+  if (type === "artifact") {
+    return (
+      <NodeViewWrapper as="span" className="inline">
+        <ArtifactMention artifactId={id} fallbackLabel={label} />
       </NodeViewWrapper>
     );
   }
@@ -63,6 +72,38 @@ function IssueMention({
     <a href={issuePath} onClick={handleClick} className="issue-mention inline-flex">
       <IssueChip
         issueId={issueId}
+        fallbackLabel={fallbackLabel}
+        className="cursor-pointer hover:bg-accent transition-colors"
+      />
+    </a>
+  );
+}
+
+function ArtifactMention({
+  artifactId,
+  fallbackLabel,
+}: {
+  artifactId: string;
+  fallbackLabel?: string;
+}) {
+  const p = useWorkspacePaths();
+  const { push, openInNewTab } = useNavigation();
+  const artifactPath = p.artifactDetail(artifactId);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.metaKey || e.ctrlKey || e.shiftKey) {
+      if (openInNewTab) openInNewTab(artifactPath, fallbackLabel);
+      return;
+    }
+    push(artifactPath);
+  };
+
+  return (
+    <a href={artifactPath} onClick={handleClick} className="artifact-mention inline-flex">
+      <ArtifactChip
+        artifactId={artifactId}
         fallbackLabel={fallbackLabel}
         className="cursor-pointer hover:bg-accent transition-colors"
       />

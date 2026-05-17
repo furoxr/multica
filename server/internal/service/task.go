@@ -1800,6 +1800,8 @@ func (s *TaskService) createAgentComment(ctx context.Context, issueID, agentID p
 	}
 	// Expand bare issue identifiers (e.g. MUL-117) into mention links.
 	content = mention.ExpandIssueIdentifiers(ctx, s.Queries, issue.WorkspaceID, content)
+	// Expand bare artifact identifiers (e.g. MUL-D3) into mention links.
+	content = mention.ExpandArtifactIdentifiers(ctx, s.Queries, issue.WorkspaceID, content)
 	comment, err := s.Queries.CreateComment(ctx, db.CreateCommentParams{
 		IssueID:     issueID,
 		WorkspaceID: issue.WorkspaceID,

@@ -8,7 +8,6 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -23,10 +22,11 @@ INSERT INTO artifact (
     creator_type,
     creator_id,
     origin_issue_id,
-    origin_task_id
+    origin_task_id,
+    number
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, workspace_id, project_id, title, summary, content, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, workspace_id, project_id, title, summary, content, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at, number
 `
 
 type CreateArtifactParams struct {
@@ -40,6 +40,7 @@ type CreateArtifactParams struct {
 	CreatorID     pgtype.UUID `json:"creator_id"`
 	OriginIssueID pgtype.UUID `json:"origin_issue_id"`
 	OriginTaskID  pgtype.UUID `json:"origin_task_id"`
+	Number        int32       `json:"number"`
 }
 
 func (q *Queries) CreateArtifact(ctx context.Context, arg CreateArtifactParams) (Artifact, error) {
@@ -54,6 +55,7 @@ func (q *Queries) CreateArtifact(ctx context.Context, arg CreateArtifactParams) 
 		arg.CreatorID,
 		arg.OriginIssueID,
 		arg.OriginTaskID,
+		arg.Number,
 	)
 	var i Artifact
 	err := row.Scan(
@@ -70,6 +72,7 @@ func (q *Queries) CreateArtifact(ctx context.Context, arg CreateArtifactParams) 
 		&i.OriginTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Number,
 	)
 	return i, err
 }
@@ -89,8 +92,40 @@ func (q *Queries) DeleteArtifact(ctx context.Context, arg DeleteArtifactParams) 
 	return err
 }
 
+const getArtifactByNumber = `-- name: GetArtifactByNumber :one
+SELECT id, workspace_id, project_id, title, summary, content, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at, number FROM artifact
+WHERE workspace_id = $1 AND number = $2
+`
+
+type GetArtifactByNumberParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Number      int32       `json:"number"`
+}
+
+func (q *Queries) GetArtifactByNumber(ctx context.Context, arg GetArtifactByNumberParams) (Artifact, error) {
+	row := q.db.QueryRow(ctx, getArtifactByNumber, arg.WorkspaceID, arg.Number)
+	var i Artifact
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.ProjectID,
+		&i.Title,
+		&i.Summary,
+		&i.Content,
+		&i.ContentType,
+		&i.CreatorType,
+		&i.CreatorID,
+		&i.OriginIssueID,
+		&i.OriginTaskID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Number,
+	)
+	return i, err
+}
+
 const getArtifactInWorkspace = `-- name: GetArtifactInWorkspace :one
-SELECT id, workspace_id, project_id, title, summary, content, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at FROM artifact
+SELECT id, workspace_id, project_id, title, summary, content, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at, number FROM artifact
 WHERE id = $1 AND workspace_id = $2
 `
 
@@ -116,12 +151,13 @@ func (q *Queries) GetArtifactInWorkspace(ctx context.Context, arg GetArtifactInW
 		&i.OriginTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Number,
 	)
 	return i, err
 }
 
 const listArtifactSummariesByOriginIssue = `-- name: ListArtifactSummariesByOriginIssue :many
-SELECT id, workspace_id, project_id, title, summary, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at
+SELECT id, workspace_id, project_id, title, summary, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, number, created_at, updated_at
 FROM artifact
 WHERE workspace_id = $1 AND origin_issue_id = $2
 ORDER BY updated_at DESC
@@ -143,6 +179,7 @@ type ListArtifactSummariesByOriginIssueRow struct {
 	CreatorID     pgtype.UUID        `json:"creator_id"`
 	OriginIssueID pgtype.UUID        `json:"origin_issue_id"`
 	OriginTaskID  pgtype.UUID        `json:"origin_task_id"`
+	Number        int32              `json:"number"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
@@ -167,6 +204,7 @@ func (q *Queries) ListArtifactSummariesByOriginIssue(ctx context.Context, arg Li
 			&i.CreatorID,
 			&i.OriginIssueID,
 			&i.OriginTaskID,
+			&i.Number,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -181,7 +219,8 @@ func (q *Queries) ListArtifactSummariesByOriginIssue(ctx context.Context, arg Li
 }
 
 const listArtifactSummariesByWorkspace = `-- name: ListArtifactSummariesByWorkspace :many
-SELECT id, workspace_id, project_id, title, summary, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at
+
+SELECT id, workspace_id, project_id, title, summary, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, number, created_at, updated_at
 FROM artifact
 WHERE workspace_id = $1
 ORDER BY updated_at DESC
@@ -198,10 +237,12 @@ type ListArtifactSummariesByWorkspaceRow struct {
 	CreatorID     pgtype.UUID        `json:"creator_id"`
 	OriginIssueID pgtype.UUID        `json:"origin_issue_id"`
 	OriginTaskID  pgtype.UUID        `json:"origin_task_id"`
+	Number        int32              `json:"number"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
+// Artifact CRUD
 func (q *Queries) ListArtifactSummariesByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListArtifactSummariesByWorkspaceRow, error) {
 	rows, err := q.db.Query(ctx, listArtifactSummariesByWorkspace, workspaceID)
 	if err != nil {
@@ -222,6 +263,7 @@ func (q *Queries) ListArtifactSummariesByWorkspace(ctx context.Context, workspac
 			&i.CreatorID,
 			&i.OriginIssueID,
 			&i.OriginTaskID,
+			&i.Number,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -246,7 +288,7 @@ UPDATE artifact SET
     origin_task_id = COALESCE($9, origin_task_id),
     updated_at = now()
 WHERE id = $1 AND workspace_id = $2
-RETURNING id, workspace_id, project_id, title, summary, content, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at
+RETURNING id, workspace_id, project_id, title, summary, content, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at, number
 `
 
 type UpdateArtifactParams struct {
@@ -288,8 +330,7 @@ func (q *Queries) UpdateArtifact(ctx context.Context, arg UpdateArtifactParams) 
 		&i.OriginTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Number,
 	)
 	return i, err
 }
-
-var _ pgx.Row

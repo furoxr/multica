@@ -1,13 +1,13 @@
 -- Artifact CRUD
 
 -- name: ListArtifactSummariesByWorkspace :many
-SELECT id, workspace_id, project_id, title, summary, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at
+SELECT id, workspace_id, project_id, title, summary, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, number, created_at, updated_at
 FROM artifact
 WHERE workspace_id = $1
 ORDER BY updated_at DESC;
 
 -- name: ListArtifactSummariesByOriginIssue :many
-SELECT id, workspace_id, project_id, title, summary, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, created_at, updated_at
+SELECT id, workspace_id, project_id, title, summary, content_type, creator_type, creator_id, origin_issue_id, origin_task_id, number, created_at, updated_at
 FROM artifact
 WHERE workspace_id = $1 AND origin_issue_id = $2
 ORDER BY updated_at DESC;
@@ -15,6 +15,10 @@ ORDER BY updated_at DESC;
 -- name: GetArtifactInWorkspace :one
 SELECT * FROM artifact
 WHERE id = $1 AND workspace_id = $2;
+
+-- name: GetArtifactByNumber :one
+SELECT * FROM artifact
+WHERE workspace_id = $1 AND number = $2;
 
 -- name: CreateArtifact :one
 INSERT INTO artifact (
@@ -27,9 +31,10 @@ INSERT INTO artifact (
     creator_type,
     creator_id,
     origin_issue_id,
-    origin_task_id
+    origin_task_id,
+    number
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: UpdateArtifact :one

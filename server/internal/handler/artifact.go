@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +14,8 @@ import (
 type ArtifactResponse struct {
 	ID            string  `json:"id"`
 	WorkspaceID   string  `json:"workspace_id"`
+	Number        int32   `json:"number"`
+	Identifier    string  `json:"identifier"`
 	ProjectID     *string `json:"project_id"`
 	Title         string  `json:"title"`
 	Summary       string  `json:"summary"`
@@ -29,6 +32,8 @@ type ArtifactResponse struct {
 type ArtifactSummaryResponse struct {
 	ID            string  `json:"id"`
 	WorkspaceID   string  `json:"workspace_id"`
+	Number        int32   `json:"number"`
+	Identifier    string  `json:"identifier"`
 	ProjectID     *string `json:"project_id"`
 	Title         string  `json:"title"`
 	Summary       string  `json:"summary"`
@@ -61,10 +66,19 @@ type UpdateArtifactRequest struct {
 	OriginTaskID  *string `json:"origin_task_id"`
 }
 
-func artifactToResponse(a db.Artifact) ArtifactResponse {
+func artifactIdentifier(prefix string, number int32) string {
+	if prefix == "" {
+		return ""
+	}
+	return prefix + "-D" + strconv.Itoa(int(number))
+}
+
+func artifactToResponse(a db.Artifact, prefix string) ArtifactResponse {
 	return ArtifactResponse{
 		ID:            uuidToString(a.ID),
 		WorkspaceID:   uuidToString(a.WorkspaceID),
+		Number:        a.Number,
+		Identifier:    artifactIdentifier(prefix, a.Number),
 		ProjectID:     uuidToPtr(a.ProjectID),
 		Title:         a.Title,
 		Summary:       a.Summary,
@@ -83,11 +97,15 @@ func artifactSummaryToResponse(
 	id, workspaceID, projectID pgtype.UUID,
 	title, summary, contentType, creatorType string,
 	creatorID, originIssueID, originTaskID pgtype.UUID,
+	number int32,
 	createdAt, updatedAt pgtype.Timestamptz,
+	prefix string,
 ) ArtifactSummaryResponse {
 	return ArtifactSummaryResponse{
 		ID:            uuidToString(id),
 		WorkspaceID:   uuidToString(workspaceID),
+		Number:        number,
+		Identifier:    artifactIdentifier(prefix, number),
 		ProjectID:     uuidToPtr(projectID),
 		Title:         title,
 		Summary:       summary,
@@ -129,11 +147,14 @@ func normalizeArtifactContentType(v string) string {
 }
 
 func (h *Handler) ListArtifacts(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	workspaceID := h.resolveWorkspaceID(r)
 	if workspaceID == "" {
 		writeError(w, http.StatusBadRequest, "workspace_id is required")
 		return
 	}
+	wsUUID := parseUUID(workspaceID)
+	prefix := h.getIssuePrefix(ctx, wsUUID)
 
 	originIssueID := r.URL.Query().Get("origin_issue_id")
 	if originIssueID != "" {
@@ -141,8 +162,8 @@ func (h *Handler) ListArtifacts(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		items, err := h.Queries.ListArtifactSummariesByOriginIssue(r.Context(), db.ListArtifactSummariesByOriginIssueParams{
-			WorkspaceID:   parseUUID(workspaceID),
+		items, err := h.Queries.ListArtifactSummariesByOriginIssue(ctx, db.ListArtifactSummariesByOriginIssueParams{
+			WorkspaceID:   wsUUID,
 			OriginIssueID: originIssueUUID,
 		})
 		if err != nil {
@@ -151,25 +172,26 @@ func (h *Handler) ListArtifacts(w http.ResponseWriter, r *http.Request) {
 		}
 		resp := make([]ArtifactSummaryResponse, len(items))
 		for i, a := range items {
-			resp[i] = artifactSummaryToResponse(a.ID, a.WorkspaceID, a.ProjectID, a.Title, a.Summary, a.ContentType, a.CreatorType, a.CreatorID, a.OriginIssueID, a.OriginTaskID, a.CreatedAt, a.UpdatedAt)
+			resp[i] = artifactSummaryToResponse(a.ID, a.WorkspaceID, a.ProjectID, a.Title, a.Summary, a.ContentType, a.CreatorType, a.CreatorID, a.OriginIssueID, a.OriginTaskID, a.Number, a.CreatedAt, a.UpdatedAt, prefix)
 		}
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
-	items, err := h.Queries.ListArtifactSummariesByWorkspace(r.Context(), parseUUID(workspaceID))
+	items, err := h.Queries.ListArtifactSummariesByWorkspace(ctx, wsUUID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list artifacts")
 		return
 	}
 	resp := make([]ArtifactSummaryResponse, len(items))
 	for i, a := range items {
-		resp[i] = artifactSummaryToResponse(a.ID, a.WorkspaceID, a.ProjectID, a.Title, a.Summary, a.ContentType, a.CreatorType, a.CreatorID, a.OriginIssueID, a.OriginTaskID, a.CreatedAt, a.UpdatedAt)
+		resp[i] = artifactSummaryToResponse(a.ID, a.WorkspaceID, a.ProjectID, a.Title, a.Summary, a.ContentType, a.CreatorType, a.CreatorID, a.OriginIssueID, a.OriginTaskID, a.Number, a.CreatedAt, a.UpdatedAt, prefix)
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) GetArtifact(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	workspaceID := h.resolveWorkspaceID(r)
 	if workspaceID == "" {
 		writeError(w, http.StatusBadRequest, "workspace_id is required")
@@ -179,19 +201,22 @@ func (h *Handler) GetArtifact(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	wsUUID := parseUUID(workspaceID)
 
-	artifact, err := h.Queries.GetArtifactInWorkspace(r.Context(), db.GetArtifactInWorkspaceParams{
+	artifact, err := h.Queries.GetArtifactInWorkspace(ctx, db.GetArtifactInWorkspaceParams{
 		ID:          artifactID,
-		WorkspaceID: parseUUID(workspaceID),
+		WorkspaceID: wsUUID,
 	})
 	if err != nil {
 		writeError(w, http.StatusNotFound, "artifact not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, artifactToResponse(artifact))
+	prefix := h.getIssuePrefix(ctx, wsUUID)
+	writeJSON(w, http.StatusOK, artifactToResponse(artifact, prefix))
 }
 
 func (h *Handler) CreateArtifact(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	workspaceID := h.resolveWorkspaceID(r)
 	if workspaceID == "" {
 		writeError(w, http.StatusBadRequest, "workspace_id is required")
@@ -230,9 +255,16 @@ func (h *Handler) CreateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	wsUUID := parseUUID(workspaceID)
+	number, err := h.Queries.BumpArtifactCounter(ctx, wsUUID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create artifact")
+		return
+	}
+
 	actorType, actorID := h.resolveActor(r, userID, workspaceID)
-	artifact, err := h.Queries.CreateArtifact(r.Context(), db.CreateArtifactParams{
-		WorkspaceID:   parseUUID(workspaceID),
+	artifact, err := h.Queries.CreateArtifact(ctx, db.CreateArtifactParams{
+		WorkspaceID:   wsUUID,
 		ProjectID:     projectID,
 		Title:         sanitizeNullBytes(req.Title),
 		Summary:       sanitizeNullBytes(req.Summary),
@@ -242,16 +274,19 @@ func (h *Handler) CreateArtifact(w http.ResponseWriter, r *http.Request) {
 		CreatorID:     parseUUID(actorID),
 		OriginIssueID: originIssueID,
 		OriginTaskID:  originTaskID,
+		Number:        number,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create artifact")
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, artifactToResponse(artifact))
+	prefix := h.getIssuePrefix(ctx, wsUUID)
+	writeJSON(w, http.StatusCreated, artifactToResponse(artifact, prefix))
 }
 
 func (h *Handler) UpdateArtifact(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	workspaceID := h.resolveWorkspaceID(r)
 	if workspaceID == "" {
 		writeError(w, http.StatusBadRequest, "workspace_id is required")
@@ -289,9 +324,10 @@ func (h *Handler) UpdateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	artifact, err := h.Queries.UpdateArtifact(r.Context(), db.UpdateArtifactParams{
+	wsUUID := parseUUID(workspaceID)
+	artifact, err := h.Queries.UpdateArtifact(ctx, db.UpdateArtifactParams{
 		ID:            artifactID,
-		WorkspaceID:   parseUUID(workspaceID),
+		WorkspaceID:   wsUUID,
 		ProjectID:     projectID,
 		Title:         optionalText(req.Title),
 		Summary:       optionalText(req.Summary),
@@ -305,7 +341,8 @@ func (h *Handler) UpdateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, artifactToResponse(artifact))
+	prefix := h.getIssuePrefix(ctx, wsUUID)
+	writeJSON(w, http.StatusOK, artifactToResponse(artifact, prefix))
 }
 
 func (h *Handler) DeleteArtifact(w http.ResponseWriter, r *http.Request) {

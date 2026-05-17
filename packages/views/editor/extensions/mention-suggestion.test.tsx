@@ -3,6 +3,7 @@ import { createRef, type ReactNode } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { workspaceKeys } from "@multica/core/workspace/queries";
 import { issueKeys, PAGINATED_STATUSES } from "@multica/core/issues/queries";
+import { artifactKeys } from "@multica/core/artifacts";
 import { I18nProvider } from "@multica/core/i18n/react";
 import type { IssueStatus, ListIssuesCache } from "@multica/core/types";
 import type { QueryClient } from "@tanstack/react-query";
@@ -67,6 +68,7 @@ function fakeQc(data: {
     archived_at: string | null;
   }>;
   issues?: Array<{ id: string; identifier: string; title: string; status: string }>;
+  artifacts?: Array<{ id: string; identifier: string; title: string }>;
 }): QueryClient {
   const map = new Map<string, unknown>();
   map.set(JSON.stringify(workspaceKeys.members("ws-1")), data.members ?? []);
@@ -81,6 +83,7 @@ function fakeQc(data: {
     JSON.stringify(issueKeys.list("ws-1")),
     { byStatus } satisfies ListIssuesCache,
   );
+  map.set(JSON.stringify(artifactKeys.all("ws-1")), data.artifacts ?? []);
   return {
     getQueryData: (key: readonly unknown[]) => map.get(JSON.stringify(key)),
   } as unknown as QueryClient;
@@ -319,6 +322,37 @@ describe("createMentionSuggestion", () => {
     const items = result as MentionItem[];
     expect(items.some((i) => i.type === "member" && i.label === "李云龙")).toBe(true);
     expect(items.some((i) => i.type === "member" && i.label === "张大彪")).toBe(false);
+  });
+
+  it("includes cached artifacts in a dedicated Artifacts group", async () => {
+    const qc = fakeQc({
+      artifacts: [
+        { id: "art-1", identifier: "MUL-D3", title: "Design doc" },
+        { id: "art-2", identifier: "MUL-D4", title: "Spec sheet" },
+      ],
+    });
+    searchIssuesMock.mockReturnValue(new Promise(() => {}));
+
+    const config = createMentionSuggestion(qc);
+    const result = config.items!({ query: "design", editor: {} as never });
+    const items = result as MentionItem[];
+
+    expect(items.some((i) => i.type === "artifact" && i.label === "MUL-D3")).toBe(true);
+
+    // jsdom lacks scrollIntoView; MentionList's selection effect calls it.
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+
+    render(
+      <I18nWrapper>
+        <MentionList items={items} query="design" command={vi.fn()} />
+      </I18nWrapper>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Artifacts")).toBeInTheDocument();
+    });
+    expect(screen.getByText("MUL-D3")).toBeInTheDocument();
+    expect(screen.getByText("Design doc")).toBeInTheDocument();
   });
 
   it("matches Chinese agent names by pinyin", () => {

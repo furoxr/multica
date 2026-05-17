@@ -223,6 +223,8 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 	// Expand bare issue identifiers (e.g. MUL-117) into mention links.
 	req.Content = mention.ExpandIssueIdentifiers(r.Context(), h.Queries, issue.WorkspaceID, req.Content)
+	// Expand bare artifact identifiers (e.g. MUL-D3) into mention links.
+	req.Content = mention.ExpandArtifactIdentifiers(r.Context(), h.Queries, issue.WorkspaceID, req.Content)
 
 	// NOTE: Comment content is stored as Markdown source. XSS is handled at the
 	// rendering layer (rehype-sanitize) and at the editor layer

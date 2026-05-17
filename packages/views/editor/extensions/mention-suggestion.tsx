@@ -14,6 +14,7 @@ import { computePosition, offset, flip, shift } from "@floating-ui/dom";
 import type { QueryClient } from "@tanstack/react-query";
 import { getCurrentWsId } from "@multica/core/platform";
 import { flattenIssueBuckets, issueKeys } from "@multica/core/issues/queries";
+import { artifactKeys } from "@multica/core/artifacts";
 import { workspaceKeys } from "@multica/core/workspace/queries";
 import { useAuthStore } from "@multica/core/auth";
 import { canAssignAgentToIssue } from "@multica/core/permissions";
@@ -24,8 +25,10 @@ import type {
   ListIssuesCache,
   MemberWithUser,
   Agent,
+  ArtifactSummary,
   Squad,
 } from "@multica/core/types";
+import { FileText } from "lucide-react";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { StatusIcon } from "../../issues/components/status-icon";
 import { useT } from "../../i18n";
@@ -46,7 +49,7 @@ import { matchesPinyin } from "./pinyin-match";
 export interface MentionItem {
   id: string;
   label: string;
-  type: "member" | "agent" | "squad" | "issue" | "all";
+  type: "member" | "agent" | "squad" | "issue" | "artifact" | "all";
   /** Secondary text shown beside the label (e.g. issue title) */
   description?: string;
   /** Issue status for StatusIcon rendering */
@@ -75,10 +78,13 @@ interface MentionGroup {
 function groupItems(items: MentionItem[]): MentionGroup[] {
   const users: MentionItem[] = [];
   const issues: MentionItem[] = [];
+  const artifacts: MentionItem[] = [];
 
   for (const item of items) {
     if (item.type === "issue") {
       issues.push(item);
+    } else if (item.type === "artifact") {
+      artifacts.push(item);
     } else {
       users.push(item);
     }
@@ -87,6 +93,7 @@ function groupItems(items: MentionItem[]): MentionGroup[] {
   const groups: MentionGroup[] = [];
   if (users.length > 0) groups.push({ label: "Users", items: users });
   if (issues.length > 0) groups.push({ label: "Issues", items: issues });
+  if (artifacts.length > 0) groups.push({ label: "Artifacts", items: artifacts });
   return groups;
 }
 
@@ -249,6 +256,7 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(
     const groupLabel = (label: string): string => {
       if (label === "Users") return t(($) => $.mention.group_users);
       if (label === "Issues") return t(($) => $.mention.group_issues);
+      if (label === "Artifacts") return t(($) => $.mention.group_artifacts);
       return label;
     };
 
@@ -297,6 +305,23 @@ function MentionRow({
   buttonRef: (el: HTMLButtonElement | null) => void;
 }) {
   const { t } = useT("editor");
+  if (item.type === "artifact") {
+    return (
+      <button
+        ref={buttonRef}
+        className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs transition-colors ${
+          selected ? "bg-accent" : "hover:bg-accent/50"
+        }`}
+        onClick={onSelect}
+      >
+        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="shrink-0 text-muted-foreground">{item.label}</span>
+        {item.description && (
+          <span className="truncate text-muted-foreground">{item.description}</span>
+        )}
+      </button>
+    );
+  }
   if (item.type === "issue") {
     // Visually dim closed issues (done/cancelled) so they're distinguishable
     // from active ones in the suggestion list — they're still selectable.
@@ -366,6 +391,15 @@ function issueToMention(i: Pick<Issue, "id" | "identifier" | "title" | "status">
     type: "issue" as const,
     description: i.title,
     status: i.status as IssueStatus,
+  };
+}
+
+function artifactToMention(a: Pick<ArtifactSummary, "id" | "identifier" | "title">): MentionItem {
+  return {
+    id: a.id,
+    label: a.identifier,
+    type: "artifact" as const,
+    description: a.title,
   };
 }
 
@@ -447,7 +481,17 @@ export function createMentionSuggestion(qc: QueryClient): Omit<
       )
       .map(issueToMention);
 
-    return [...allItem, ...userItems, ...issueItems];
+    const cachedArtifacts: ArtifactSummary[] =
+      qc.getQueryData(artifactKeys.all(wsId)) ?? [];
+    const artifactItems: MentionItem[] = cachedArtifacts
+      .filter(
+        (a) =>
+          a.identifier.toLowerCase().includes(q) ||
+          a.title.toLowerCase().includes(q),
+      )
+      .map(artifactToMention);
+
+    return [...allItem, ...userItems, ...issueItems, ...artifactItems];
   }
 
   return {

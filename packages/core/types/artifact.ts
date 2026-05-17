@@ -1,5 +1,6 @@
 export interface ArtifactSummary {
   id: string;
+  identifier: string;
   workspace_id: string;
   project_id: string | null;
   title: string;
