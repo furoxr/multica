@@ -23,6 +23,7 @@ import {
   ChevronDown,
   ChevronRight,
   Settings,
+  FileText,
   LogOut,
   Plus,
   Check,
@@ -113,6 +114,7 @@ type NavKey =
   | "usage"
   | "runtimes"
   | "skills"
+  | "artifacts"
   | "settings";
 
 // Static schema (key + icon) — labels resolved at render via useT("layout").
@@ -127,6 +129,7 @@ type NavLabelKey =
   | "usage"
   | "runtimes"
   | "skills"
+  | "artifacts"
   | "settings";
 
 const personalNav: { key: NavKey; labelKey: NavLabelKey; icon: typeof Inbox }[] = [
@@ -137,6 +140,7 @@ const personalNav: { key: NavKey; labelKey: NavLabelKey; icon: typeof Inbox }[] 
 const workspaceNav: { key: NavKey; labelKey: NavLabelKey; icon: typeof Inbox }[] = [
   { key: "issues", labelKey: "issues", icon: ListTodo },
   { key: "projects", labelKey: "projects", icon: FolderKanban },
+  { key: "artifacts", labelKey: "artifacts", icon: FileText },
   { key: "autopilots", labelKey: "autopilots", icon: Zap },
   { key: "agents", labelKey: "agents", icon: Bot },
   { key: "squads", labelKey: "squads", icon: Users },

@@ -34,5 +34,10 @@ UPDATE workspace SET issue_counter = issue_counter + 1
 WHERE id = $1
 RETURNING issue_counter;
 
+-- name: BumpArtifactCounter :one
+UPDATE workspace SET artifact_counter = artifact_counter + 1
+WHERE id = $1
+RETURNING artifact_counter;
+
 -- name: DeleteWorkspace :exec
 DELETE FROM workspace WHERE id = $1;

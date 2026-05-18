@@ -223,6 +223,8 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 	// Expand bare issue identifiers (e.g. MUL-117) into mention links.
 	req.Content = mention.ExpandIssueIdentifiers(r.Context(), h.Queries, issue.WorkspaceID, req.Content)
+	// Expand bare artifact identifiers (e.g. MUL-D3) into mention links.
+	req.Content = mention.ExpandArtifactIdentifiers(r.Context(), h.Queries, issue.WorkspaceID, req.Content)
 
 	// NOTE: Comment content is stored as Markdown source. XSS is handled at the
 	// rendering layer (rehype-sanitize) and at the editor layer
@@ -310,10 +312,10 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 // is announcing to everyone, not specifically requesting work from the agent.
 func (h *Handler) commentMentionsOthersButNotAssignee(content string, issue db.Issue) bool {
 	mentions := util.ParseMentions(content)
-	// Filter out issue mentions — they are cross-references, not @people.
+	// Filter out issue/artifact mentions — they are cross-references, not @people.
 	filtered := mentions[:0]
 	for _, m := range mentions {
-		if m.Type != "issue" {
+		if m.Type != "issue" && m.Type != "artifact" {
 			filtered = append(filtered, m)
 		}
 	}

@@ -30,6 +30,17 @@ type Resolver interface {
 	PrefixResolver
 }
 
+// ArtifactResolver looks up an artifact by workspace and number.
+type ArtifactResolver interface {
+	GetArtifactByNumber(ctx context.Context, arg db.GetArtifactByNumberParams) (db.Artifact, error)
+}
+
+// ArtifactExpansionResolver combines what ExpandArtifactIdentifiers needs.
+type ArtifactExpansionResolver interface {
+	ArtifactResolver
+	PrefixResolver
+}
+
 // ExpandIssueIdentifiers scans markdown content for bare issue identifier
 // patterns (e.g. MUL-117) and replaces them with mention links:
 // [MUL-117](mention://issue/<uuid>)
@@ -114,6 +125,84 @@ func ExpandIssueIdentifiers(ctx context.Context, resolver Resolver, workspaceID 
 	}
 
 	// Apply replacements from right to left to preserve offsets.
+	result := content
+	for i := len(replacements) - 1; i >= 0; i-- {
+		r := replacements[i]
+		result = result[:r.start] + r.text + result[r.end:]
+	}
+
+	return result
+}
+
+// ExpandArtifactIdentifiers scans markdown content for bare artifact
+// identifier patterns (e.g. MUL-D3) and replaces them with mention links:
+// [MUL-D3](mention://artifact/<uuid>)
+//
+// It skips identifiers that are:
+//   - Already inside a markdown link
+//   - Inside inline code: `MUL-D3`
+//   - Inside fenced code blocks
+func ExpandArtifactIdentifiers(ctx context.Context, resolver ArtifactExpansionResolver, workspaceID pgtype.UUID, content string) string {
+	ws, err := resolver.GetWorkspace(ctx, workspaceID)
+	if err != nil || ws.IssuePrefix == "" {
+		return content
+	}
+	prefix := ws.IssuePrefix
+
+	pattern := regexp.MustCompile(`(?:^|(?:\W))` + `(` + regexp.QuoteMeta(prefix) + `-D(\d+))` + `(?:\W|$)`)
+
+	skipRegions := findSkipRegions(content)
+
+	allMatches := pattern.FindAllStringSubmatchIndex(content, -1)
+	if len(allMatches) == 0 {
+		return content
+	}
+
+	type replacement struct {
+		start, end int
+		text       string
+	}
+	var replacements []replacement
+
+	for _, match := range allMatches {
+		identStart, identEnd := match[2], match[3]
+		numStr := content[match[4]:match[5]]
+
+		if inSkipRegion(identStart, skipRegions) {
+			continue
+		}
+		if isInsideMarkdownLink(content, identStart, identEnd) {
+			continue
+		}
+
+		num, err := strconv.Atoi(numStr)
+		if err != nil || num <= 0 {
+			continue
+		}
+
+		artifact, err := resolver.GetArtifactByNumber(ctx, db.GetArtifactByNumberParams{
+			WorkspaceID: workspaceID,
+			Number:      int32(num),
+		})
+		if err != nil {
+			continue
+		}
+
+		identifier := content[identStart:identEnd]
+		artifactID := uuidToString(artifact.ID)
+		mentionLink := fmt.Sprintf("[%s](mention://artifact/%s)", identifier, artifactID)
+
+		replacements = append(replacements, replacement{
+			start: identStart,
+			end:   identEnd,
+			text:  mentionLink,
+		})
+	}
+
+	if len(replacements) == 0 {
+		return content
+	}
+
 	result := content
 	for i := len(replacements) - 1; i >= 0; i-- {
 		r := replacements[i]
