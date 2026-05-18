@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 type ArtifactResponse struct {
@@ -282,7 +283,9 @@ func (h *Handler) CreateArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prefix := h.getIssuePrefix(ctx, wsUUID)
-	writeJSON(w, http.StatusCreated, artifactToResponse(artifact, prefix))
+	resp := artifactToResponse(artifact, prefix)
+	h.publish(protocol.EventArtifactCreated, workspaceID, actorType, actorID, map[string]any{"artifact": resp})
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func (h *Handler) UpdateArtifact(w http.ResponseWriter, r *http.Request) {
@@ -290,6 +293,10 @@ func (h *Handler) UpdateArtifact(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
 	if workspaceID == "" {
 		writeError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	userID, ok := requireUserID(w, r)
+	if !ok {
 		return
 	}
 	artifactID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "id"), "id")
@@ -342,13 +349,20 @@ func (h *Handler) UpdateArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prefix := h.getIssuePrefix(ctx, wsUUID)
-	writeJSON(w, http.StatusOK, artifactToResponse(artifact, prefix))
+	resp := artifactToResponse(artifact, prefix)
+	actorType, actorID := h.resolveActor(r, userID, workspaceID)
+	h.publish(protocol.EventArtifactUpdated, workspaceID, actorType, actorID, map[string]any{"artifact": resp})
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handler) DeleteArtifact(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
 	if workspaceID == "" {
 		writeError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
+	userID, ok := requireUserID(w, r)
+	if !ok {
 		return
 	}
 	artifactID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "id"), "id")
@@ -364,5 +378,7 @@ func (h *Handler) DeleteArtifact(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to delete artifact")
 		return
 	}
+	actorType, actorID := h.resolveActor(r, userID, workspaceID)
+	h.publish(protocol.EventArtifactDeleted, workspaceID, actorType, actorID, map[string]any{"artifact_id": uuidToString(artifactID)})
 	w.WriteHeader(http.StatusNoContent)
 }

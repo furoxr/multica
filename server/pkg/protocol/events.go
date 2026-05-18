@@ -79,6 +79,11 @@ const (
 	EventProjectResourceCreated = "project_resource:created"
 	EventProjectResourceDeleted = "project_resource:deleted"
 
+	// Artifact events
+	EventArtifactCreated = "artifact:created"
+	EventArtifactUpdated = "artifact:updated"
+	EventArtifactDeleted = "artifact:deleted"
+
 	// Label events
 	EventLabelCreated       = "label:created"
 	EventLabelUpdated       = "label:updated"
